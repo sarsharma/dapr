@@ -87,7 +87,8 @@ type api struct {
 	actor                    actors.Actors
 	pubsubAdapter            runtime_pubsub.Adapter
 	sendToOutputBindingFn    func(name string, req *bindings.InvokeRequest) (*bindings.InvokeResponse, error)
-	getBindingsMetadataFn    func() []byte
+	getAllBindingsMetadataFn func() []byte
+	getBindingMetadataFn     func(name string) []byte
 	id                       string
 	extendedMetadata         sync.Map
 	readyStatus              bool
@@ -147,7 +148,8 @@ func NewAPI(
 	pubsubAdapter runtime_pubsub.Adapter,
 	actor actors.Actors,
 	sendToOutputBindingFn func(name string, req *bindings.InvokeRequest) (*bindings.InvokeResponse, error),
-	getBindingsMetadataFn func() []byte,
+	getAllBindingsMetadataFn func() []byte,
+	getBindingMetadataFn func(name string) []byte,
 	tracingSpec config.TracingSpec,
 	shutdown func(),
 ) API {
@@ -172,7 +174,8 @@ func NewAPI(
 		actor:                    actor,
 		pubsubAdapter:            pubsubAdapter,
 		sendToOutputBindingFn:    sendToOutputBindingFn,
-		getBindingsMetadataFn:    getBindingsMetadataFn,
+		getAllBindingsMetadataFn: getAllBindingsMetadataFn,
+		getBindingMetadataFn:     getBindingMetadataFn,
 		id:                       appID,
 		tracingSpec:              tracingSpec,
 		shutdown:                 shutdown,
@@ -389,7 +392,13 @@ func (a *api) constructMetadataEndpoints() []Endpoint {
 			Methods: []string{fasthttp.MethodGet},
 			Route:   "metadata/bindings",
 			Version: apiVersionV1,
-			Handler: a.onGetBindingsMetadata,
+			Handler: a.onGetAllBindingsMetadata,
+		},
+		{
+			Methods: []string{fasthttp.MethodGet},
+			Route:   "metadata/bindings/{name}",
+			Version: apiVersionV1,
+			Handler: a.onGetBindingMetadata,
 		},
 	}
 }
@@ -1858,9 +1867,19 @@ func (a *api) onPutMetadata(reqCtx *fasthttp.RequestCtx) {
 	respond(reqCtx, withEmpty())
 }
 
-func (a *api) onGetBindingsMetadata(reqCtx *fasthttp.RequestCtx) {
-	r := a.getBindingsMetadataFn()
+func (a *api) onGetAllBindingsMetadata(reqCtx *fasthttp.RequestCtx) {
+	r := a.getAllBindingsMetadataFn()
 	respond(reqCtx, withJSON(fasthttp.StatusOK, r))
+}
+
+func (a *api) onGetBindingMetadata(reqCtx *fasthttp.RequestCtx) {
+	name := fmt.Sprintf("%v", reqCtx.UserValue("name"))
+	r := a.getBindingMetadataFn(name)
+	if r == nil {
+		respond(reqCtx, withError(fasthttp.StatusNotFound, NewErrorResponse("ERR_BINDING_METADATA_NOT_FOUND", fmt.Sprintf(messages.ErrBindingMetadataNotFound, name))))
+	} else {
+		respond(reqCtx, withJSON(fasthttp.StatusOK, r))
+	}
 }
 
 func (a *api) onShutdown(reqCtx *fasthttp.RequestCtx) {

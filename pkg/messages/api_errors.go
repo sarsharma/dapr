@@ -21,6 +21,7 @@ const (
 
 	// Binding.
 	ErrInvokeOutputBinding = "error when invoke output binding %s: %s"
+	ErrBindingMetadataNotFound = "binding metadata not found for %s"
 
 	// PubSub.
 	ErrPubsubNotConfigured      = "no pubsub is configured"

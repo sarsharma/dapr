@@ -310,7 +310,7 @@ func (a *DaprRuntime) Run(opts ...Option) error {
 	return nil
 }
 
-func (a *DaprRuntime) getBindingsMetadata() []byte {
+func (a *DaprRuntime) getAllBindingsMetadata() []byte {
 	ab := allBindingsMetadata{}
 	req := &bindings.InvokeRequest{
 		Operation: bindings.OperationKind(bindings.MetadataOperation),
@@ -339,6 +339,31 @@ func (a *DaprRuntime) getBindingsMetadata() []byte {
 		return nil
 	}
 	return r
+}
+
+func (a *DaprRuntime) getBindingMetadata(name string) []byte {
+	name = "bindings." + name
+	req := &bindings.InvokeRequest{
+		Operation: bindings.OperationKind(bindings.MetadataOperation),
+	}
+	for k, v := range a.bindingsRegistry.GetOutputBindings() {
+		if k == name {
+			binding := v()
+			for _, op := range binding.Operations() {
+				if op == bindings.MetadataOperation {
+					res, err := binding.Invoke(context.TODO(), req)
+					if err != nil {
+						log.Errorf("failed to get metadata for output binding %s: %v", k)
+						break
+					}
+					if res.Data != nil {
+						return res.Data
+					}
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (a *DaprRuntime) getNamespace() string {
@@ -1147,7 +1172,8 @@ func (a *DaprRuntime) startHTTPServer(port int, publicPort *int, profilePort int
 		a.getPublishAdapter(),
 		a.actor,
 		a.sendToOutputBinding,
-		a.getBindingsMetadata,
+		a.getAllBindingsMetadata,
+		a.getBindingMetadata,
 		a.globalConfig.Spec.TracingSpec,
 		a.ShutdownWithWait,
 	)
