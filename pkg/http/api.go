@@ -87,6 +87,7 @@ type api struct {
 	actor                    actors.Actors
 	pubsubAdapter            runtime_pubsub.Adapter
 	sendToOutputBindingFn    func(name string, req *bindings.InvokeRequest) (*bindings.InvokeResponse, error)
+	getBindingsMetadataFn    func() []byte
 	id                       string
 	extendedMetadata         sync.Map
 	readyStatus              bool
@@ -146,6 +147,7 @@ func NewAPI(
 	pubsubAdapter runtime_pubsub.Adapter,
 	actor actors.Actors,
 	sendToOutputBindingFn func(name string, req *bindings.InvokeRequest) (*bindings.InvokeResponse, error),
+	getBindingsMetadataFn func() []byte,
 	tracingSpec config.TracingSpec,
 	shutdown func(),
 ) API {
@@ -170,6 +172,7 @@ func NewAPI(
 		actor:                    actor,
 		pubsubAdapter:            pubsubAdapter,
 		sendToOutputBindingFn:    sendToOutputBindingFn,
+		getBindingsMetadataFn:    getBindingsMetadataFn,
 		id:                       appID,
 		tracingSpec:              tracingSpec,
 		shutdown:                 shutdown,
@@ -381,6 +384,12 @@ func (a *api) constructMetadataEndpoints() []Endpoint {
 			Route:   "metadata/{key}",
 			Version: apiVersionV1,
 			Handler: a.onPutMetadata,
+		},
+		{
+			Methods: []string{fasthttp.MethodGet},
+			Route:   "metadata/bindings",
+			Version: apiVersionV1,
+			Handler: a.onGetBindingsMetadata,
 		},
 	}
 }
@@ -1847,6 +1856,11 @@ func (a *api) onPutMetadata(reqCtx *fasthttp.RequestCtx) {
 	body := reqCtx.PostBody()
 	a.extendedMetadata.Store(key, string(body))
 	respond(reqCtx, withEmpty())
+}
+
+func (a *api) onGetBindingsMetadata(reqCtx *fasthttp.RequestCtx) {
+	r := a.getBindingsMetadataFn()
+	respond(reqCtx, withJSON(fasthttp.StatusOK, r))
 }
 
 func (a *api) onShutdown(reqCtx *fasthttp.RequestCtx) {

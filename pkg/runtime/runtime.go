@@ -229,6 +229,15 @@ type pubsubSubscribedMessage struct {
 	pubsub     string
 }
 
+type bindingMetadata struct {
+	Name        string   `json:"name"`
+	CertStatus  string   `json:"cert-status"`
+	Version     string   `json:"version"`
+	BindingType []string `json:"binding-type"`
+}
+
+type allBindingsMetadata []bindingMetadata
+
 // NewDaprRuntime returns a new runtime with the given runtime config and global config.
 func NewDaprRuntime(runtimeConfig *Config, globalConfig *config.Configuration, accessControlList *config.AccessControlList, resiliencyProvider resiliency.Provider) *DaprRuntime {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -299,6 +308,37 @@ func (a *DaprRuntime) Run(opts ...Option) error {
 	}
 
 	return nil
+}
+
+func (a *DaprRuntime) getBindingsMetadata() []byte {
+	ab := allBindingsMetadata{}
+	req := &bindings.InvokeRequest{
+		Operation: bindings.OperationKind(bindings.MetadataOperation),
+	}
+	for k, v := range a.bindingsRegistry.GetOutputBindings() {
+		binding := v()
+		ops := binding.Operations()
+		for _, op := range ops {
+			if op == bindings.MetadataOperation {
+				res, err := binding.Invoke(context.TODO(), req)
+				if err != nil {
+					log.Errorf("failed to get metadata for output binding %s: %v", k, err)
+					continue
+				}
+				if res.Data != nil {
+					b := bindingMetadata{}
+					json.Unmarshal(res.Data, &b)
+					ab = append(ab, b)
+				}
+			}
+		}
+	}
+	r, err := json.Marshal(ab)
+	if err != nil {
+		log.Errorf("failed to marshal bindings metadata: %v", err)
+		return nil
+	}
+	return r
 }
 
 func (a *DaprRuntime) getNamespace() string {
@@ -1107,6 +1147,7 @@ func (a *DaprRuntime) startHTTPServer(port int, publicPort *int, profilePort int
 		a.getPublishAdapter(),
 		a.actor,
 		a.sendToOutputBinding,
+		a.getBindingsMetadata,
 		a.globalConfig.Spec.TracingSpec,
 		a.ShutdownWithWait,
 	)

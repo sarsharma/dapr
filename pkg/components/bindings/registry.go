@@ -44,6 +44,8 @@ type (
 		HasOutputBinding(name, version string) bool
 		CreateInputBinding(name, version string) (bindings.InputBinding, error)
 		CreateOutputBinding(name, version string) (bindings.OutputBinding, error)
+		GetInputBindings() map[string]func() bindings.InputBinding
+		GetOutputBindings() map[string]func() bindings.OutputBinding
 	}
 
 	bindingsRegistry struct {
@@ -128,6 +130,14 @@ func (b *bindingsRegistry) HasInputBinding(name, version string) bool {
 func (b *bindingsRegistry) HasOutputBinding(name, version string) bool {
 	_, ok := b.getOutputBinding(name, version)
 	return ok
+}
+
+func (b *bindingsRegistry) GetOutputBindings() map[string]func() bindings.OutputBinding {
+	return b.outputBindings
+}
+
+func (b *bindingsRegistry) GetInputBindings() map[string]func() bindings.InputBinding {
+	return b.inputBindings
 }
 
 func (b *bindingsRegistry) getInputBinding(name, version string) (func() bindings.InputBinding, bool) {
