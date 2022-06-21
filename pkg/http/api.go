@@ -1869,6 +1869,9 @@ func (a *api) onPutMetadata(reqCtx *fasthttp.RequestCtx) {
 
 func (a *api) onGetAllBindingsMetadata(reqCtx *fasthttp.RequestCtx) {
 	r := a.getAllBindingsMetadataFn()
+	if r == nil {
+		respond(reqCtx, withEmpty())
+	}
 	respond(reqCtx, withJSON(fasthttp.StatusOK, r))
 }
 
